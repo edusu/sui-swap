@@ -31,12 +31,8 @@ async fn main() {
 
 async fn run_c() {
     // Check all args/envs are present
-    let url = env::args()
-        .nth(2)
-        .unwrap_or_else(|| panic!("USE: -c <URL> <TOKEN>"));
-    let token = env::args()
-        .nth(3)
-        .unwrap_or_else(|| panic!("USE: -c <URL> <TOKEN>"));
+    let url = env::args().nth(2).expect("USE: -c <URL> <TOKEN>");
+    let token = env::args().nth(3).expect("USE: -c <URL> <TOKEN>");
     let Ok(token_balance_url) = env::var(TOKEN_BALANCE_ENV) else {
         panic!("{} env var is not set", TOKEN_BALANCE_ENV);
     };

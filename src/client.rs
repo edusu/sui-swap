@@ -120,12 +120,14 @@ impl Client {
 
     /// Get token address from tokens.json file
     fn get_token_address(&self) -> String {
-        let mut file = File::open("tokens.json").unwrap();
+        let mut file = File::open("tokens.json").expect("Unable to open tokens file");
         let mut data = String::new();
         file.read_to_string(&mut data)
             .expect("Unable to read  tokens file");
-        let v: Value = serde_json::from_str(&data).unwrap();
-        let token_address = v[&self.token].as_str().unwrap();
+        let v: Value = serde_json::from_str(&data).expect("JSON was not well-formatted");
+        let token_address = v[&self.token]
+            .as_str()
+            .expect("Token Selected is not listed in tokens.json");
         token_address.to_string()
     }
 
