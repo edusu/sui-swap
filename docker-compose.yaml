@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  sui-swap-server:
+    image: sui-swap:0.1.0
+    environment:
+      RUST_LOG: info
+    ports:
+      - '8080:8080' # Mapea el puerto 8080 del contenedor al host
+    networks:
+      - my_network
+
+  sui-swap-client-1:
+    image: sui-swap:0.1.0
+    environment:
+      RUST_LOG: info
+      TOKEN_BALANCE_URL: 'https://coins.llama.fi/prices/current/sui:'
+    depends_on:
+      - sui-swap-server
+    entrypoint: >
+      /bin/sh -c 'sleep 5 && sui-swap -c ws://sui-swap-server:8080 SUI'
+    networks:
+      - my_network
+
+  sui-swap-client-2:
+    image: sui-swap:0.1.0
+    environment:
+      RUST_LOG: info
+      TOKEN_BALANCE_URL: 'https://coins.llama.fi/prices/current/sui:'
+    depends_on:
+      - sui-swap-server
+    entrypoint: >
+      /bin/sh -c 'sleep 5 && sui-swap -c ws://sui-swap-server:8080 FUD'
+    networks:
+      - my_network
+
+  sui-swap-client-3:
+    image: sui-swap:0.1.0
+    environment:
+      RUST_LOG: info
+      TOKEN_BALANCE_URL: 'https://coins.llama.fi/prices/current/sui:'
+    depends_on:
+      - sui-swap-server
+    entrypoint: >
+      /bin/sh -c 'sleep 5 && sui-swap -c ws://sui-swap-server:8080 AAA'
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge
+    internal: false
