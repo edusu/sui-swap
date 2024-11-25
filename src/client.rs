@@ -1,6 +1,6 @@
 use futures::TryStreamExt;
 use futures_util::{future, pin_mut, StreamExt};
-use log::{error, info};
+use log::{debug, error, info};
 use serde_json::Value;
 use std::io::Read;
 use std::process;
@@ -29,6 +29,7 @@ impl Client {
         }
     }
 
+    /// Refactor for sent messages to server
     pub fn send_swap_response_message(
         message: SwapResponse,
         ws_sender: Tx,
@@ -47,21 +48,23 @@ impl Client {
         }
     }
 
+    /// Main function for the client
     pub async fn start(self) {
         let token_address = self.get_token_address();
-        info!("Token address: {}", token_address);
-        // self.get_token_price().await;
-        // let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
-        // tokio::spawn(read_stdin(stdin_tx));
+        debug!("Token address: {}", token_address);
 
+        // Websocket connection with server
         let (ws_stream, _) = connect_async(&self.url)
             .await
             .expect("Failed to connect to server");
         info!("WebSocket handshake has been successfully completed");
+        //
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let (outgoing, incoming) = ws_stream.split();
+        // Send messages to Server
         let in_to_ws = rx.map(Ok).forward(outgoing);
+        // Receive messages from Server
         let ws_to_server = incoming.try_for_each(|msg| {
             info!("Received a message from server");
             match msg {
@@ -69,6 +72,7 @@ impl Client {
                     Ok(message) => {
                         info!("Received message: {:?}", message);
                         match message {
+                            // Send token price to server
                             SwapRequest::TokenPrice => {
                                 tokio::spawn(Client::get_token_price(
                                     self.token_balance_url.clone(),
@@ -76,14 +80,17 @@ impl Client {
                                     tx.clone(),
                                 ));
                             }
+                            // Send Token Name to Server
                             SwapRequest::WhichToken => {
                                 let response = SwapResponse::WhichToken(self.token.clone());
                                 Client::send_swap_response_message(response, tx.clone())
                                     .expect("Error sending WhichToken message to server");
                             }
+                            // Server responded our token is valid
                             SwapRequest::ValidToken => {
                                 info!("Received ValidToken message from server");
                             }
+                            // Server responded our token is invalid
                             SwapRequest::RepeatedToken => {
                                 error!("Received RepeatedToken message from server");
                                 // Finish the connection
@@ -106,10 +113,12 @@ impl Client {
             future::ok(())
         });
 
+        // Listen in both futures, outcoming and incoming messages
         pin_mut!(in_to_ws, ws_to_server);
         future::select(in_to_ws, ws_to_server).await;
     }
 
+    /// Get token address from tokens.json file
     fn get_token_address(&self) -> String {
         let mut file = File::open("tokens.json").unwrap();
         let mut data = String::new();
@@ -120,6 +129,7 @@ impl Client {
         token_address.to_string()
     }
 
+    /// Get token price from token_balance_url
     async fn get_token_price(
         token_balance_url: String,
         token_address: String,

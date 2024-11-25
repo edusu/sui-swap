@@ -1,7 +1,7 @@
 use bincode;
 use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::{future, pin_mut, stream::TryStreamExt, StreamExt};
-use log::{error, info};
+use log::{error, info, warn};
 use std::{
     collections::HashMap,
     io::Error as IoError,
@@ -43,6 +43,7 @@ impl Server {
         }
     }
 
+    /// Refactor for sent messages to server
     pub fn send_swap_request_message(
         message: SwapRequest,
         ws_sender: Tx,
@@ -64,12 +65,15 @@ impl Server {
         }
     }
 
+    /// Main function for the server
     pub async fn start(mut self) -> Result<(), IoError> {
+        // Take the addr and listen on it
         let listener = TcpListener::bind(&self.addr)
             .await
             .expect("Failed to bind address");
         info!("Listening on: {}", self.addr);
 
+        // Main loop checking for new connections and sending messages every 10 secs
         loop {
             tokio::select! {
                 _ = self.timeout.tick() => {
@@ -82,10 +86,12 @@ impl Server {
                             let message = SwapRequest::TokenPrice;
                             Self::send_swap_request_message(message, ws_sink.clone(), *peer_addr)
                         } else {
+                            // Don't remove because can just subscribed, but would be nice to remove peers that don't message us back in x time
                             true
                         }
                     });
                 },
+                // New connections from clients
                 accept_result = listener.accept() => {
                     match accept_result {
                         Ok((stream, addr)) => {
@@ -100,6 +106,7 @@ impl Server {
         }
     }
 
+    // Handle a new connection from a client
     async fn handle_connection(
         peer_map: PeerMap,
         raw_stream: TcpStream,
@@ -122,8 +129,6 @@ impl Server {
 
         // Update peers map with the new connection
         let (tx, rx) = unbounded();
-        // tx.unbounded_send(Message::Text("HOLA".into()))
-        //     .expect("Error sending message to peer");
         match peer_map.lock() {
             Ok(mut peers) => {
                 info!("Inserting peer {} into peer map", addr);
@@ -136,18 +141,20 @@ impl Server {
         };
 
         let (outgoing, incoming) = ws_stream.split();
-
+        // Send messages to Client
         let receive_from_others = rx.map(Ok).forward(outgoing);
 
         // Send WichToken message to the new peer
         let request = SwapRequest::WhichToken;
         Self::send_swap_request_message(request, tx.clone(), addr);
 
+        // Receive messages from CLient
         let broadcast_incoming = incoming.try_for_each(|msg| {
             info!("Received a message from {}", addr);
             match msg {
                 Message::Binary(bytes) => match bincode::deserialize::<SwapResponse>(&bytes) {
                     Ok(message) => match message {
+                        // New Info about token price
                         SwapResponse::TokenPrice(token_info) => {
                             info!("Received TokenPrice message from {}", addr);
                             // Check addr is valid and token is what we expect
@@ -156,9 +163,10 @@ impl Server {
                             if let Some(_) = token_map_locked.0.get(&addr) {
                                 info!("TokenPrice: {}", token_info);
                             } else {
-                                info!("Not Registered yet");
+                                warn!("Not Registered yet");
                             }
                         }
+                        // Response to our WhichToken message
                         SwapResponse::WhichToken(token) => {
                             info!("Received WhichToken message from {}", addr);
                             info!("Token: {}", token);
@@ -195,9 +203,11 @@ impl Server {
             future::ok(())
         });
 
+        // Listen in both futures, outcoming and incoming messages
         pin_mut!(broadcast_incoming, receive_from_others);
         future::select(broadcast_incoming, receive_from_others).await;
 
+        // Client disconnected, remove from maps
         info!("{} disconnected", &addr);
         peer_map
             .lock()
