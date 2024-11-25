@@ -18,7 +18,7 @@ docker-compose up
 This will start the server and the three clients.
 
 Manual Usage
-You can also run it manually using cargo run. For the server, use:
+You can also run it manually using cargo run. First copy .env.example into .env (or decalre env vars manually) For the server, use:
 
 ```bash
 cargo run -- -s 
@@ -68,7 +68,7 @@ Se levanta el servidor y los tres clientes.
 
 ### Uso manual
 
-Se puede también ejecutar mediante cargo run, en mi caso para el servidor uso:
+Se puede también ejecutar mediante cargo run. Aunque en este caso antes se debe copiar el contenido de .env.example en .env (después de crearlo) o poner las variables de entorno necesarias de forma manual. En mi caso para el servidor uso:
 
 ```bash
 cargo run -- -s 
